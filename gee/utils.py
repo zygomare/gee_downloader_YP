@@ -138,7 +138,13 @@ def download_images_roi(images: ee.ImageCollection, grids, save_dir, bands=None,
             with open(o_f, 'wb') as f:
                 f.write(response.content)
 
-            fix_raster_upsidedown(o_f,output_tif=o_f)
+
+            try:
+                fix_raster_upsidedown(o_f,output_tif=o_f)
+            except Exception as e:
+                print('fix_raster_upsidedown error',e)
+                os.system('rm {}'.format(o_f))
+                continue
 
 
     return 1, bands_c
@@ -164,6 +170,8 @@ def merge_download_dir(download_dir,
     ### the minimum size should vary with the resolution and grid size,
     ### to be fixed
     tifs = [_ for _ in glob.glob(os.path.join(download_dir, f'*_*_*.tif')) if(os.path.getsize(_) / 1024.0) > (1.0*len(bandnames)) ]
+    print(tifs)
+
     if len(tifs) < 1:
         raise DownloadDirIncompleteError(download_dir)
     # dst_crs = 'EPSG:4326'
@@ -371,21 +379,23 @@ def fix_raster_upsidedown(input_tif, output_tif):
     from rasterio import Affine
 
     upsidedown = False
-
-    with rasterio.open(input_tif) as src:
-        profile = src.profile
-        # Ensure transform has negative y pixel size
-        transform = src.transform
-        if transform.e > 0:  # y pixel size
-            e = transform.e *(-1)
-            f = transform.f + (src.height * transform.e)
-            transform = Affine(a=transform.a, b=transform.b, c=transform.c,
+    try:
+        with rasterio.open(input_tif) as src:
+            profile = src.profile
+            # Ensure transform has negative y pixel size
+            transform = src.transform
+            if transform.e > 0:  # y pixel size
+                e = transform.e *(-1)
+                f = transform.f + (src.height * transform.e)
+                transform = Affine(a=transform.a, b=transform.b, c=transform.c,
                                d=transform.d, e=e, f=f)
-            upsidedown = True
-            data = src.read(
-                out_shape=(src.count, src.height, src.width),
-                resampling=Resampling.nearest
-            )
+                upsidedown = True
+                data = src.read(
+                    out_shape=(src.count, src.height, src.width),
+                    resampling=Resampling.nearest
+                )
+    except Exception as e:
+        raise (e)
 
     if upsidedown:
         profile.update(transform=transform)

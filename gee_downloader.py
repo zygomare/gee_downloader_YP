@@ -31,7 +31,8 @@ class GEEDownloader(Downloader):
         ## it is 0.1 when the resolution is 10 based on the previous experience
 
         ## why 16? because it is tested ok for senteinel-2 l1c with 16 bands including obs geo
-        step = 0.1 * (resolution / 10) * 16 / bandnumber
+        # step = 0.1 * (resolution / 10) * 16 / bandnumber
+        step = 0.1 * (resolution / 10) * 13 / bandnumber
 
         x_step, y_step = step, step
         print(f'GEE cell size for res:{resolution}, band num: {bandnumber}:', x_step, y_step)
@@ -70,10 +71,13 @@ class GEEDownloader(Downloader):
                 raise ValueError('only Polygon or MultiPolygon is supported for the aoi')
             self.aoi_name = str(row['name']) if 'name' in row else str(i)
 
-            # if self.aoi_name != '346872':
+            # cells = pd.read_csv('/home/yan/WorkSpace/projects/ATLAS/incomplete.csv')
+            # cells['name'] = cells['name'].astype(str)
+            # # if self.aoi_name != '271744':
+            # if self.aoi_name not in cells['name'].values:
             #     continue
             # print(type(row['name']), row['name'])
-            # if self.aoi_name != '246940':
+            # if self.aoi_name != 'augustin':
             #     continue
             # if i>400 or i<=300:
             #      continue
@@ -263,9 +267,9 @@ class GEEDownloader(Downloader):
         func_snowice = getattr(gee, f'get_{prefix}snowice')
         for _date in self.date_downloading:
             # print(_date.month)
-            # if _date.month < 5 or _date.month>11:
-            #     print(_date.month, '-------skip')
-            #     continue
+            if _date.month < 5 or _date.month>11:
+                print(_date.month, '-------skip')
+                continue
             ## 1. obtain cloud percentage
 
             # cld_percentage = self.get_s2_cloudpercentage(s_d='2018-06-10',e_d='2018-06-11')
