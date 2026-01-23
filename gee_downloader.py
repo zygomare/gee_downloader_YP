@@ -102,7 +102,9 @@ class GEEDownloader(Downloader):
             if self.date_df is not None:
                 self.date_downloading = self.date_df[self.date_df['name'] == self.aoi_name]['date'].values
                 if self.date_downloading.shape[0] < 1:
-                    raise Exception(f'no date found for aoi {self.aoi_name}')
+                    # raise Exception(f'no date found for aoi {self.aoi_name}')
+                    print(f'no date found for aoi {self.aoi_name}')
+                    continue
                 self.date_downloading = [pendulum.from_format(str(_), 'YYYYMMDD') for _ in self.date_downloading]
 
             else:
@@ -179,7 +181,7 @@ class GEEDownloader(Downloader):
             extral_info_dic = config['extral_info'] if 'extral_info' in config else {}
             cloud_per = 0 if 'cloud_percentage' not in extral_info_dic else extral_info_dic['cloud_percentage']
 
-            save_dir = os.path.join(self.save_dir, asset_savedir, anynom)
+            save_dir = os.path.join(self.save_dir, asset_savedir, anynom, str(self.aoi_name), str(date.year))
 
             ofs = glob.glob(os.path.join(save_dir, f'{str.upper(asset)}_{_s_d}*{self.aoi_name}_{resolution}m.tif'))
             if len(ofs) == 1:
@@ -267,9 +269,9 @@ class GEEDownloader(Downloader):
         func_snowice = getattr(gee, f'get_{prefix}snowice')
         for _date in self.date_downloading:
             # print(_date.month)
-            if _date.month < 5 or _date.month>11:
-                print(_date.month, '-------skip')
-                continue
+            # if _date.month < 5 or _date.month>11:
+            #     print(_date.month, '-------skip')
+            #     continue
             ## 1. obtain cloud percentage
 
             # cld_percentage = self.get_s2_cloudpercentage(s_d='2018-06-10',e_d='2018-06-11')
