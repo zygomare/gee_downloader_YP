@@ -142,6 +142,7 @@ def merge_tifs(tif_files,
                dst_crs=None,
                RGB = False,
                min_max = (None,None),
+               output_cog = True,
                **extra_info):
     '''
     @obs_geo, None or (theta_z, theta_s, phi)
@@ -206,6 +207,16 @@ def merge_tifs(tif_files,
          "crs": dst_crs_ret
          }
     )
+
+    if output_cog:
+        out_meta.update(
+            {'driver':"COG",
+            'compress': "DEFLATE",
+            'predictor': 2,
+            'overview_resampling': "average"
+             }
+        )
+
     with rasterio.open(out_file, 'w', **out_meta) as dst:
         # if description is not None:
         #     f.descriptions = description
@@ -221,5 +232,154 @@ def merge_tifs(tif_files,
             # print(len(bandnames_c),mosaic.shape)
             dst.descriptions = tuple(bandnames_c)
     return 1, dst_crs_ret
+
+
+# ---------------- YAML config support ----------------
+def load_config_file(config_path: str) -> dict:
+    """Load a .ini or .yml/.yaml config file and return the internal config dict
+    expected by Downloader / GEEDownloader (lower-cased section keys).
+
+    YAML schema supported (as proposed by user):
+      GLOBAL: {backend, aoi, start_date, end_date, assets, save_dir, ...}
+      STAC: {stac_api, stac_best_item, stac_max_items, <optional per-asset sources>}
+      GEE: {project_id, target, mode, cloud_percentage, snowice_percentage, ...}
+      ASSETS: [ {ASSET_NAME: {stac_source, gee_source, include_bands, ...}}, ... ]
+    """
+    ext = os.path.splitext(config_path)[1].lower()
+    if ext == '.ini':
+        import configparser
+        cfg = configparser.ConfigParser()
+        cfg.read(config_path)
+        return covert_config_to_dic(cfg)
+
+    if ext in ('.yml', '.yaml'):
+        try:
+            import yaml  # type: ignore
+        except Exception as e:
+            raise ImportError("PyYAML is required for .yml configs. Install with: pip install pyyaml") from e
+
+        with open(config_path, 'r') as f:
+            y = yaml.safe_load(f)
+        return convert_yaml_to_internal_config(y)
+
+    raise ValueError(f"Unsupported config extension: {ext}. Use .ini, .yml, or .yaml")
+
+
+def _as_list(x):
+    if x is None:
+        return []
+    if isinstance(x, (list, tuple)):
+        return list(x)
+    return [x]
+
+
+def _comma_join(x):
+    # keep existing code expectations (comma-separated strings)
+    if x is None:
+        return None
+    if isinstance(x, str):
+        return x
+    if isinstance(x, (list, tuple)):
+        return ','.join(str(v) for v in x)
+    return str(x)
+
+
+def convert_yaml_to_internal_config(y: dict) -> dict:
+    """Convert the new YAML structure into the legacy dict structure.
+
+    Returns dict with keys: 'global', '<asset_name_lower>', ...
+
+    - 'global' contains merged GLOBAL + backend-specific settings
+
+    - each asset section contains 'source' chosen from stac_source/gee_source based on backend
+    """
+    if not isinstance(y, dict):
+        raise ValueError('YAML root must be a mapping/dict')
+
+    # required blocks
+    global_y = y.get('GLOBAL') or y.get('global')
+    if not isinstance(global_y, dict):
+        raise ValueError('YAML must contain GLOBAL: {...}')
+
+    backend = str(global_y.get('backend', 'gee')).strip().lower()
+    if backend not in ('gee', 'stac', 'gcld'):
+        raise ValueError(f"GLOBAL.backend must be 'gee' or 'stac' (got: {backend})")
+
+    # stac_y = y.get('STAC') or y.get('stac') or {}
+    # gee_y = y.get('GEE') or y.get('gee') or {}
+
+    backend_y = y.get(backend.upper()) or y.get(backend) or {}
+
+
+    assets_y = y.get('ASSETS') or y.get('assets_config') or y.get('Assets') or None
+    if assets_y is None:
+        # allow old-style: asset sections at top-level
+        assets_y = []
+    if not isinstance(assets_y, list):
+        raise ValueError('ASSETS must be a list of {ASSET_NAME: {...}} entries')
+
+    # build legacy global section
+    global_out = {}
+    # keep keys from GLOBAL (except backend)
+    for k, v in global_y.items():
+        if str(k).lower() == 'backend':
+            continue
+        global_out[str(k).lower()] = v
+
+    global_out['backend'] = backend
+
+    # merge backend-specific knobs into global so existing Downloader doesn't break
+    if isinstance(backend_y, dict):
+        for k, v in backend_y.items():
+            lk = str(k).lower()
+            # only merge if not already set in GLOBAL
+            if lk not in global_out:
+                global_out[lk] = v
+
+    # normalize required fields for legacy code
+    # assets can be 'S2_L1TOA' or ['S2_L1TOA', ...]
+    global_out['assets'] = _comma_join(global_out.get('assets'))
+    # legacy Downloader expects these; set safe defaults if missing (useful for stac backend)
+    global_out.setdefault('mode', 'download')
+    global_out.setdefault('target', 'all')
+    global_out.setdefault('cloud_percentage', 100)
+    global_out.setdefault('snowice_percentage', 100)
+
+    # Build asset sections
+    cfg = {'global': global_out}
+
+    for entry in assets_y:
+        if not isinstance(entry, dict) or len(entry) != 1:
+            raise ValueError('Each ASSETS entry must be a single-key mapping like: - S2_L1TOA: {...}')
+        asset_name, asset_conf = next(iter(entry.items()))
+        if not isinstance(asset_conf, dict):
+            raise ValueError(f'ASSETS.{asset_name} must map to a dict')
+        asset_key = str(asset_name).strip().lower()
+
+        # pick source based on backend
+        src_key = f"{backend}_source"
+        source = asset_conf.get(src_key)
+
+
+        # if backend source missing, keep as NONE and let downstream warn
+        out_asset = {}
+        for k, v in asset_conf.items():
+            lk = str(k).lower()
+            if lk in ('stac_source', 'gee_source'):
+                continue
+            out_asset[lk] = v
+
+        out_asset['source'] = None if (source is None or str(source).upper() == 'NONE') else source
+
+        # normalize include_bands to legacy comma string
+        if 'include_bands' in out_asset:
+            out_asset['include_bands'] = _comma_join(out_asset['include_bands'])
+
+        cfg[asset_key] = out_asset
+
+    return cfg
+
+
+
 
 

@@ -160,6 +160,10 @@ def get_s2_snowicepercentage(date, aoi_rect_ee, water_mask=None,resolution=20):
 
     acq_time = features[0]['properties']['PRODUCT_ID'].split('_')[2]
 
+
+    prodids = ','.join([feat['properties']['PRODUCT_ID'] for feat in features])
+
+
     for i in range(img_count_snowiceprob):
         img_1 = ee.Image(images_snowice_list.get(i)).clip(aoi_rect_ee)
         snowicenum = ee.Number(img_1.get('snowice_num')).getInfo() ##90:30 60:986
@@ -175,7 +179,7 @@ def get_s2_snowicepercentage(date, aoi_rect_ee, water_mask=None,resolution=20):
 
     if total_pixels == 0:
         raise EEImageOverlayError(ee_source='S2_SNOW_ICE_PROBABILITY',date=s_d)
-    return acq_time, snowice_pixels/total_pixels*100, cloud_pixels/total_pixels*100, water_pixels/total_pixels*100, other_pixels/total_pixels*100
+    return acq_time, snowice_pixels/total_pixels*100, cloud_pixels/total_pixels*100, water_pixels/total_pixels*100, other_pixels/total_pixels*100, prodids
 
 def get_s2_acquistion(date, aoi_rect_ee):
     s_d, e_d = date.format('YYYY-MM-DD'), (date + pendulum.duration(days=1)).format('YYYY-MM-DD')

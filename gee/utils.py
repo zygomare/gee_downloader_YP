@@ -170,7 +170,6 @@ def merge_download_dir(download_dir,
     ### the minimum size should vary with the resolution and grid size,
     ### to be fixed
     tifs = [_ for _ in glob.glob(os.path.join(download_dir, f'*_*_*.tif')) if(os.path.getsize(_) / 1024.0) > (1.0*len(bandnames)) ]
-    print(tifs)
 
     if len(tifs) < 1:
         raise DownloadDirIncompleteError(download_dir)

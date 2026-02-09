@@ -30,8 +30,8 @@ class GEEDownloader(Downloader):
         ## the cell size varies with the resolution
         ## it is 0.1 when the resolution is 10 based on the previous experience
 
-        ## why 16? because it is tested ok for senteinel-2 l1c with 16 bands including obs geo
-        # step = 0.1 * (resolution / 10) * 16 / bandnumber
+        ## why 13? because it is tested ok for senteinel-2 l1c with 16 bands including obs geo
+        # step = 0.1 * (resolution / 10) * 13 / bandnumber
         step = 0.1 * (resolution / 10) * 13 / bandnumber
 
         x_step, y_step = step, step
@@ -77,7 +77,7 @@ class GEEDownloader(Downloader):
             # if self.aoi_name not in cells['name'].values:
             #     continue
             # print(type(row['name']), row['name'])
-            # if self.aoi_name != 'augustin':
+            # if self.aoi_name != '348337':
             #     continue
             # if i>400 or i<=300:
             #      continue
@@ -92,9 +92,7 @@ class GEEDownloader(Downloader):
                 self.water_mask = False
             else:
                 self.water_mask = True
-
-
-
+                
             self.aoi_rect_ee = ee.Geometry.Rectangle(self.aoi_bounds)
 
             self.__create_cells()
@@ -133,8 +131,6 @@ class GEEDownloader(Downloader):
 
 
             self.info_df = pd.read_csv(self.info_csv)
-
-
             download_func = getattr(self, f'_download_{sensor_type}')
 
             config =  image_collection_dic[prefix]['config']
@@ -291,14 +287,31 @@ class GEEDownloader(Downloader):
 
                     # acq_time, snowice_pixels / total_pixels * 100, cloud_pixels / total_pixels * 100, water_pixels / total_pixels * 100, other_pixels / total_pixels * 100
 
-                    acquisition_time, snowice_percentage, cld_percentage, water_p,other_p = func_snowice(_date, self.aoi_rect_ee,
+                    acquisition_time, snowice_percentage, cld_percentage, water_p,other_p, proids = func_snowice(_date, self.aoi_rect_ee,
                                       water_mask=water_mask,
                                       resolution=20)
 
                     # date, sensor, type, acquisition_time, cloud_percentage, snow_ice_percentage
 
-                    info = {"date": _date.format('YYYY-MM-DD'), "sensor": prefix, "type": "optical", "acquisition_time": acquisition_time,"cloud_percentage": round(cld_percentage,1), "snow_ice_percentage": round(snowice_percentage,1),"water_percentage": round(water_p,1),"other_percentage": round(other_p,1)}
-                    print(f'{_date}, {prefix}, "optical", {acquisition_time}, {round(cld_percentage,1)},{round(snowice_percentage,1)}, {round(water_p,1)},{round(other_p,1)}')
+                    info = {"date": _date.format('YYYY-MM-DD'),
+                            "sensor": prefix,
+                            "type": "optical",
+                            "acquisition_time": acquisition_time,
+                            "cloud_percentage": round(cld_percentage,1),
+                            "snow_ice_percentage": round(snowice_percentage,1),
+                            "water_percentage": round(water_p,1),
+                            "other_percentage": round(other_p,1),
+                            "proids": proids
+                            }
+                    print(f'{_date}, {prefix}, '
+                          f'"optical", '
+                          f'{acquisition_time}, '
+                          f'{round(cld_percentage,1)},'
+                          f'{round(snowice_percentage,1)}, '
+                          f'{round(water_p,1)},'
+                          f'{round(other_p,1)}',
+                          proids
+                          )
 
                     info = pd.DataFrame([info])
                     info.to_csv(self.info_csv, mode='a', header=False, index=False)

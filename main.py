@@ -4,7 +4,7 @@ import configparser
 from plumbum import cli
 from plumbum import colors
 
-from utils import covert_config_to_dic, colorstr
+from utils import load_config_file, colorstr
 try:
     import gdal
 except:
@@ -24,15 +24,27 @@ class App(cli.Application):
         if not os.path.exists(config_f):
             print(f"{prefix}: {config_f}")
             sys.exit(-1)
-        config = configparser.ConfigParser()
-        config.read(config_f)
-        config_dic = covert_config_to_dic(config)
+        config_dic = load_config_file(config_f)
         self._config_dic = config_dic
 
 
     def main(self, *args):
-        from gee_downloader import GEEDownloader
-        downloader = GEEDownloader(**self._config_dic)
+        # import os, sys
+        # print("python:", sys.executable)
+        # print("PROJ_LIB:", os.environ.get("PROJ_LIB"))
+        # print("GDAL_DATA:", os.environ.get("GDAL_DATA"))
+        # print("CONDA_PREFIX:", os.environ.get("CONDA_PREFIX"))
+
+        backend = str.lower(self._config_dic.get('global', {}).get('backend', 'gee') or 'gee')
+        if backend == 'stac':
+            from stac_downloader import STACDownloader
+            downloader = STACDownloader(config_path=self._config_f, **self._config_dic)
+        elif backend == 'gcld':
+            from gcld_downloader import GCLDDownloader
+            downloader = GCLDDownloader(**self._config_dic)
+        else:
+            from gee_downloader import GEEDownloader
+            downloader = GEEDownloader(**self._config_dic)
 
         ext = os.path.splitext(self._config_f)[-1]
         now = datetime.datetime.now()

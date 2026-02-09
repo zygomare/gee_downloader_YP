@@ -17,7 +17,7 @@ CATALOG_DIC = {'image_collections':
                'image':{}}
 
 INFO_COL_DIC = {
-    'optical':['date','sensor','type','acquisition_time','cloud_percentage','snow_ice_percentage','water_percentage','other_percentage'],
+    'optical':['date','sensor','type','acquisition_time','cloud_percentage','snow_ice_percentage','water_percentage','other_percentage', 'product_ids'],
     'radar':['date','sensor','type','acquisition_time','bands'],
     'embeding':['date','sensor']
 }
@@ -41,8 +41,9 @@ class Downloader():
         self.save_dir = os.path.join(self.save_dir, self.project_name)
 
         self.proj_gdf = gpd.read_file(self._aoi_f)
+        if 'name' in self.proj_gdf.columns:
+            self.proj_gdf['name'] = self.proj_gdf['name'].astype(str)
         self.water_mask = True
-
 
 
         self.asset_dic = self.__categroy_assets()
@@ -55,7 +56,7 @@ class Downloader():
             # print(self.date_df)
             # self.date_df["date"] = self.date_df.apply(lambda x: pendulum.from_format(str(x['date']), "YYYYMMDD"),axis=1)
             self.date_df['name'] = self.date_df['name'].astype(str)
-
+            self.date_df['date'] = self.date_df['date'].astype(str)
 
         self.start_date = pendulum.from_format(self._config_dic['global']['start_date'], 'YYYY-MM-DD') if 'start_date' in self._config_dic['global'] else None
         self.end_date = pendulum.from_format(self._config_dic['global']['end_date'], 'YYYY-MM-DD') if 'end_date' in self._config_dic['global'] else None
